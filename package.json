@@ -1,0 +1,9 @@
+{
+  "name": "nsfw-detector-api",
+  "version": "1.0.0",
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.15.0",
+    "nsfwjs": "^3.0.0",
+    "formidable": "^3.5.0"
+  }
+}
