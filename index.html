@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>NSFW Detector - Fixed</title>
+    <style>
+        body { font-family: Arial; max-width: 800px; margin: 0 auto; padding: 20px; background: #f0f0f0; }
+        .container { background: white; border-radius: 10px; padding: 20px; }
+        h1 { text-align: center; }
+        .upload-area { border: 2px dashed #ccc; border-radius: 10px; padding: 40px; text-align: center; margin: 20px 0; cursor: pointer; background: #fafafa; }
+        .upload-area:hover { border-color: #007bff; background: #f0f8ff; }
+        #preview { max-width: 100%; max-height: 300px; display: block; margin: 20px auto; }
+        .safe { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; text-align: center; }
+        .nsfw { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; text-align: center; }
+        .details { margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+        .bar { background: #e0e0e0; border-radius: 5px; margin: 5px 0; overflow: hidden; }
+        .bar-fill { padding: 3px 8px; text-align: right; font-size: 12px; border-radius: 5px; transition: width 0.3s; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        button:disabled { background: #6c757d; }
+        .status { margin: 10px 0; font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔍 NSFW Image Detector</h1>
+    <p style="text-align: center;">Deteksi gambar dewasa - <strong>Offline</strong></p>
+    
+    <div class="upload-area" id="dropArea">
+        📁 Klik atau drag & drop gambar di sini<br>
+        <small>Support: JPG, PNG, GIF, WebP</small>
+    </div>
+    
+    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+    <img id="preview" style="display: none;">
+    
+    <div id="status" class="status"></div>
+    <div id="result"></div>
+    
+    <div style="text-align: center;">
+        <button id="loadModelBtn">📦 Load Model</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/nsfwjs@3.0.0/dist/nsfwjs.min.js"></script>
+
+<script>
+    let model = null;
+    let modelLoaded = false;
+    
+    const dropArea = document.getElementById('dropArea');
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+    const resultDiv = document.getElementById('result');
+    const statusDiv = document.getElementById('status');
+    const loadModelBtn = document.getElementById('loadModelBtn');
+    
+    async function loadNSFWModel() {
+        statusDiv.innerHTML = '🔄 Mengunduh model... (sekitar 10MB)';
+        loadModelBtn.disabled = true;
+        
+        try {
+            // PAKAI URL ALTERNATIF YANG MASIH AKTIF
+            // Ganti URL ini sesuai kebutuhan:
+            const modelURL = './models/mobilenet_v2/';
+            
+            model = await nsfwjs.load(modelURL);
+            modelLoaded = true;
+            statusDiv.innerHTML = '✅ Model siap! Upload gambar.';
+            loadModelBtn.textContent = '✅ Siap';
+            loadModelBtn.disabled = false;
+        } catch (error) {
+            console.error(error);
+            statusDiv.innerHTML = '❌ Gagal: ' + error.message + '. Coba refresh.';
+            loadModelBtn.textContent = '📦 Coba Lagi';
+            loadModelBtn.disabled = false;
+        }
+    }
+    
+    async function detectImage(imageElement) {
+        if (!modelLoaded) {
+            resultDiv.innerHTML = '<div class="safe">⚠️ Load model dulu!</div>';
+            return;
+        }
+        
+        statusDiv.innerHTML = '🔍 Mendeteksi...';
+        const predictions = await model.classify(imageElement);
+        
+        const nsfwScore = (predictions.find(p => p.className === 'Hentai')?.probability || 0) + 
+                         (predictions.find(p => p.className === 'Porn')?.probability || 0) + 
+                         (predictions.find(p => p.className === 'Sexy')?.probability || 0);
+        const isNsfw = nsfwScore > 0.5;
+        
+        resultDiv.innerHTML = `<div class="${isNsfw ? 'nsfw' : 'safe'}">${isNsfw ? '🔞 NSFW' : '✅ SAFE'}</div>`;
+        resultDiv.innerHTML += `<div class="details"><strong>Detail:</strong>`;
+        
+        for (let p of predictions) {
+            let percent = (p.probability * 100).toFixed(1);
+            let color = (p.className === 'Hentai' || p.className === 'Porn' || p.className === 'Sexy') ? '#dc3545' : '#007bff';
+            resultDiv.innerHTML += `
+                <div>${p.className}: ${percent}%</div>
+                <div class="bar"><div class="bar-fill" style="width: ${percent}%; background: ${color};">${percent > 15 ? percent+'%' : ''}</div></div>
+            `;
+        }
+        resultDiv.innerHTML += `</div>`;
+        statusDiv.innerHTML = '✅ Selesai';
+    }
+    
+    function handleFile(file) {
+        if (!file || !file.type.startsWith('image/')) return alert('Pilih file gambar!');
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            preview.onload = () => detectImage(preview);
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    dropArea.onclick = () => fileInput.click();
+    dropArea.ondragover = (e) => { e.preventDefault(); dropArea.style.borderColor = '#007bff'; };
+    dropArea.ondragleave = () => dropArea.style.borderColor = '#ccc';
+    dropArea.ondrop = (e) => { e.preventDefault(); dropArea.style.borderColor = '#ccc'; handleFile(e.dataTransfer.files[0]); };
+    fileInput.onchange = (e) => handleFile(e.target.files[0]);
+    loadModelBtn.onclick = loadNSFWModel;
+    
+    statusDiv.innerHTML = '📦 Klik "Load Model" untuk mulai';
+</script>
+</body>
+</html>
